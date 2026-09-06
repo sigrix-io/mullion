@@ -1,0 +1,50 @@
+name: Defect
+description: An image comes out wrong, or a documented behaviour is not the behaviour.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Every defect this library addresses is silent — a wrong answer renders
+        as a *plausible picture*. So the input is the report. Without it there
+        is nothing to reproduce, because every implementation in this space
+        produces a plausible picture for some input and the whole question is
+        which one.
+  - type: textarea
+    id: input
+    attributes:
+      label: The input
+      description: >-
+        Attach the file, or paste the code that builds it. A constructing
+        snippet is often better than a file — see tests/conftest.py, where
+        every fixture is built that way so a reader can see what makes it
+        awkward.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: call
+    attributes:
+      label: The call you made
+      description: The exact call, with its arguments.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what you got
+      description: >-
+        Pixel values beat adjectives. `image.getpixel((0, 0))` returning
+        `(0, 0, 0)` where you wanted `(255, 255, 255)` is a report that can be
+        turned into a test in one step; "the background looks wrong" is not.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Mullion, Pillow and Python.
+      placeholder: "mullion 0.1.0, Pillow 12.3.0, Python 3.13"
+    validations:
+      required: true

@@ -1,0 +1,25 @@
+# Every change to this repository requires review from a maintainer.
+#
+# Merging is discretionary and stays with the maintainers — see
+# CONTRIBUTING.md. Contributions are welcome; governance is not open.
+#
+# The owner is a team rather than a person so that reviewer load can be shared
+# without editing this file for every change in personnel, and so the
+# repository does not advertise a single point of failure to anyone deciding
+# whether to depend on it. It may hold one person; the indirection is the point.
+
+*                       @sigrix-io/mullion-maintainers
+
+# The published surface. Everything under src/ is a compatibility commitment
+# the moment someone pins to a release, so it is called out separately from the
+# repository default even though the owner is currently the same.
+#
+# tests/ belongs here for a reason worth stating: the defects this library
+# exists for are silent — a wrong answer renders as a plausible picture — so
+# the tests are the only thing that can see them. A weakened test is a
+# weakened guarantee, arriving as a green run.
+
+/src/                   @sigrix-io/mullion-maintainers
+/tests/                 @sigrix-io/mullion-maintainers
+/pyproject.toml         @sigrix-io/mullion-maintainers
+/VERSIONING.md          @sigrix-io/mullion-maintainers

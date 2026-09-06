@@ -1,0 +1,82 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mullion"
+version = "0.1.0"
+description = "One correct way to open an image: EXIF orientation applied, transparency resolved, backgrounds cleaned."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Sigrix" }]
+keywords = ["pillow", "images", "exif", "transparency", "png", "dpi", "background-removal"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+
+# Pillow is the only runtime dependency, and the floor is where the APIs used
+# here settled rather than where the newest release sits: a library that
+# demands the latest Pillow is one an application cannot adopt without moving
+# its own pin first.
+dependencies = ["pillow>=10.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff==0.16.5"]
+
+[project.urls]
+Homepage = "https://github.com/sigrix-io/mullion"
+Source = "https://github.com/sigrix-io/mullion"
+Issues = "https://github.com/sigrix-io/mullion/issues"
+Changelog = "https://github.com/sigrix-io/mullion/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mullion"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src"]
+
+# A new codebase gets the strict baseline. The long ignore list in an older
+# repository is a record of what was too expensive to fix at the time; there is
+# nothing here to grandfather, so only genuine preferences are listed below.
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "S",    # flake8-bandit
+]
+ignore = [
+    "SIM108",  # ternary operator — readability preference
+    "SIM102",  # nested if — often clearer than a long combined condition
+]
+
+[tool.ruff.lint.per-file-ignores]
+# assert is the whole vocabulary of a test.
+"tests/**/*.py" = ["S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["mullion"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

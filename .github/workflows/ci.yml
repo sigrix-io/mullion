@@ -1,0 +1,103 @@
+# Lint, then test, then prove the package builds and installs.
+#
+# The ruff steps run before pytest deliberately: a formatting slip should fail
+# the job in ten seconds rather than after the suite. They are two commands
+# rather than one because `check` and `format --check` answer different
+# questions and only one of them is about style.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      # Pinned, so that a local `ruff format` and this check can never disagree
+      # about formatter behaviour. Dependabot bumps it; the tests gate the bump.
+      - run: python -m pip install ruff==0.16.5
+      - run: python -m ruff check src/ tests/
+      - run: python -m ruff format --check src/ tests/
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest
+
+  # A floor nobody tests is a guess. pyproject declares pillow>=10.0, so
+  # something has to actually run against 10.0 — otherwise the first user on an
+  # older Pillow discovers the real floor for us, in production.
+  oldest-pillow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pip install "pillow==10.0.*"
+      - run: python -m pytest
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install build twine
+      - run: python -m build
+      # Catches a README that renders on GitHub and not on PyPI, which is
+      # otherwise found at the moment of publishing and not before.
+      - run: python -m twine check dist/*
+      # The wheel is what users get. Installing it from a clean directory is
+      # the only thing that proves py.typed and the package layout shipped —
+      # an editable install reads the source tree and would pass either way.
+      - name: The built wheel imports and carries its type marker
+        run: |
+          python -m venv /tmp/wheelcheck
+          /tmp/wheelcheck/bin/python -m pip install --quiet dist/*.whl
+          cd /tmp
+          /tmp/wheelcheck/bin/python -c "
+          import mullion, pathlib
+          print('version', mullion.__version__)
+          root = pathlib.Path(mullion.__file__).parent
+          assert (root / 'py.typed').exists(), 'py.typed did not ship'
+          for name in mullion.__all__:
+              assert hasattr(mullion, name), name
+          print(len(mullion.__all__), 'exports resolve')
+          "
+
+  # The aggregate gate. One check to require on main, so adding a job above
+  # does not mean editing a branch protection rule to match.
+  ci-passed:
+    if: always()
+    needs: [lint, test, oldest-pillow, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job succeeded
+        run: |
+          echo '${{ toJSON(needs) }}'
+          [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "false" ]

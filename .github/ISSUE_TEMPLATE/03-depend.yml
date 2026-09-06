@@ -1,0 +1,41 @@
+name: I depend on this
+description: Not a defect. Tell us you are building on 0.x so we do not break you silently.
+labels: ["dependent"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        [VERSIONING.md](https://github.com/sigrix-io/mullion/blob/main/VERSIONING.md)
+        says plainly that any `0.x` release may break any other. This form is
+        the other half of that bargain: the practical difference between an
+        announced breaking change and a surprising one is knowing somebody is
+        out there.
+  - type: input
+    id: version
+    attributes:
+      label: Which version are you pinned to?
+      placeholder: "mullion~=0.1.0"
+    validations:
+      required: true
+  - type: checkboxes
+    id: surface
+    attributes:
+      label: Which parts do you use?
+      description: >-
+        This is what tells us which change would actually cost you something.
+      options:
+        - label: "`normalize` / `open_bytes` / `open_path`"
+        - label: "`clean_background` and its defaults"
+        - label: "`page` geometry and DPI"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else worth knowing
+      description: >-
+        What you are building, whether you have pinned the defaults, whether a
+        change in *output* would be a problem for you or merely a diff. No
+        obligation to name your project.
+    validations:
+      required: false
