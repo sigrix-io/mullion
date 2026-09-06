@@ -1,0 +1,47 @@
+name: Change
+description: You want Mullion to do something it does not.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Please read [what is out of
+        scope](https://github.com/sigrix-io/mullion#what-it-is-not) first.
+        The scope is narrow on purpose and a change that widens it will be
+        turned down however good it is — an application takes this library on
+        because it is small.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What goes wrong today
+      description: >-
+        Describe the situation, not the feature. The most useful reports here
+        are "an image arrived in a shape you do not handle and was silently
+        accepted", which is the thesis of the whole library.
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What you do instead right now
+      description: >-
+        If the answer is a few lines of Pillow in your own codebase, paste
+        them. That is the strongest possible case: it is what every caller
+        would otherwise be writing separately, which is exactly the argument
+        for it living here.
+      render: python
+    validations:
+      required: false
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Does this handle one image, or several?
+      description: >-
+        The line is stated in the README and CONTRIBUTING: this library handles
+        one image, and composing several is the application's job.
+      options:
+        - One image
+        - Several images
+        - Not sure
+    validations:
+      required: true

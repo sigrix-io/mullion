@@ -1,0 +1,23 @@
+# Python bytecode. CONTRIBUTING.md asks every contributor to run pytest and
+# ruff before pushing, so these appear during a normal contribution rather than
+# only on a maintainer's machine. Without this entry one routine `git add -A`
+# commits build artefacts nobody wants to review.
+__pycache__/
+*.py[cod]
+
+# An editable install writes here, and `python -m build` writes the other two.
+*.egg-info/
+build/
+dist/
+
+# Installing without touching the system Python means a virtual environment.
+# Both conventional names are listed so whichever a contributor reaches for
+# stays untracked.
+.venv/
+venv/
+
+# Test and tooling caches.
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/

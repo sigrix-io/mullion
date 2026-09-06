@@ -1,0 +1,37 @@
+# Keeps the two things this repository pins from ageing quietly.
+#
+# The ruff version in ci.yml is pinned so that a local `ruff format` and the CI
+# check can never disagree. That trade has a second half which is easy to leave
+# unbuilt: a pin only stays correct if something bumps it, and left alone the
+# formatter drifts away from whatever contributors have installed — the same
+# failure pinning exists to prevent, arriving from the other direction and with
+# a green check the whole way.
+#
+# The test matrix is what makes this safe rather than merely automatic. A bump
+# that breaks anything arrives as a red check on a pull request nobody has
+# merged, and because `ci-passed` is required on `main`, it cannot land without
+# passing.
+#
+# Two GitHub behaviours worth knowing: this file is read from the default
+# branch, so editing it on a branch changes nothing until it merges; and
+# Dependabot needs the dependency graph enabled on the repository, which is not
+# something this file can assert.
+#
+# Deliberately no auto-merge. Whether these should merge themselves when green
+# is a judgement about how much unattended merging is wanted, and it belongs on
+# the record rather than defaulted into by a config nobody revisits.
+version: 2
+updates:
+  # Both the runtime floor and the dev extras.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Turns an action deprecation into a pull request, rather than a warning at
+  # the top of a log nobody reads until the runtime is withdrawn and checkout
+  # starts failing on whichever pull request happens to be open that day.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
