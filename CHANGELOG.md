@@ -7,6 +7,24 @@ pre-1.0 means what it says.
 
 ## [Unreleased]
 
+### Fixed
+
+- The annotations `py.typed` promises are now verified. The wheel ships
+  `src/mullion/py.typed` and the package declares `Typing :: Typed`, which
+  together tell a consumer's type checker to trust these annotations — but
+  nothing had ever run one, and `mypy --strict` reported nine errors on the
+  first release. All nine were `Image.load()`, typed `PixelAccess | None` and
+  indexed without narrowing. Nothing raised: a wrong annotation just makes
+  somebody else's type checker confidently green about the wrong thing.
+  ([#3](https://github.com/sigrix-io/mullion/issues/3))
+
+### Changed
+
+- `mullion.background`'s two internal pixel readers now assert the image mode
+  they were written for instead of assuming it, so a caller handing one the
+  wrong mode fails immediately rather than reading a shape nothing checks.
+  No public API changed.
+
 ## [0.1.0]
 
 First release.
