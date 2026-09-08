@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from .source import WHITE, Matte
 
@@ -106,13 +106,60 @@ class CleanResult:
         return self.reason
 
 
+# ``Image.load()`` is typed ``PixelAccess | None``, and what a subscript on it
+# yields depends on the image's mode — a triple for ``RGB``, a single level for
+# ``L``. This module reads both, so one return type cannot be honest about
+# either. The two protocols below say which is expected, and the loaders below
+# them establish it: they assert the mode rather than assuming it, so a future
+# caller handing one of these functions the wrong image fails at the assert
+# instead of reading a shape nothing checks. That is the whole reason these are
+# not ``# type: ignore`` comments — an ignore would silence the checker without
+# recording what it was silenced *for*.
+
+
+class _RgbPixels(Protocol):
+    """Pixel access for an ``RGB`` image."""
+
+    def __getitem__(self, position: tuple[int, int]) -> tuple[int, int, int]: ...
+
+
+class _GreyPixels(Protocol):
+    """Pixel access for an ``L`` image."""
+
+    def __getitem__(self, position: tuple[int, int]) -> int: ...
+
+
+def _rgb_pixels(image: PILImage) -> _RgbPixels:
+    """Pixel access for ``image``, which must already be ``RGB``."""
+    if image.mode != "RGB":
+        raise ValueError(f"expected an RGB image, got mode {image.mode!r}")
+    access = image.load()
+    if access is None:  # pragma: no cover - Pillow only answers None for an unreadable image
+        raise ValueError("image has no pixel access")
+    return cast("_RgbPixels", access)
+
+
+def _grey_pixels(image: PILImage) -> _GreyPixels:
+    """Pixel access for ``image``, which must already be ``L``."""
+    if image.mode != "L":
+        raise ValueError(f"expected an L image, got mode {image.mode!r}")
+    access = image.load()
+    if access is None:  # pragma: no cover - Pillow only answers None for an unreadable image
+        raise ValueError("image has no pixel access")
+    return cast("_GreyPixels", access)
+
+
 def _border_pixels(image: PILImage) -> list[tuple[int, int, int]]:
-    """The one-pixel frame around ``image``, as RGB triples."""
+    """The one-pixel frame around ``image``, as RGB triples.
+
+    ``image`` must already be ``RGB`` — that is what makes the return type
+    true, and ``_rgb_pixels`` enforces it rather than trusting the caller.
+    """
     width, height = image.size
     if width == 0 or height == 0:
         return []
 
-    pixels = image.load()
+    pixels = _rgb_pixels(image)
     frame: list[tuple[int, int, int]] = []
     for x in range(width):
         frame.append(pixels[x, 0])
@@ -166,7 +213,7 @@ def _background_mask(image: PILImage, *, tolerance: int) -> tuple[PILImage, floa
     # value (128) marks exactly the reached region and leaves unreachable
     # candidates at 255 to be discarded below.
     working = candidates.copy()
-    working_pixels = working.load()
+    working_pixels = _grey_pixels(working)
 
     seeds: list[tuple[int, int]] = []
     for x in range(width):

@@ -16,6 +16,7 @@ from PIL import Image
 from mullion import (
     DEFAULT_TOLERANCE,
     BackgroundCleanMode,
+    background,
     clean_background,
     keeps_alpha,
     looks_like_white_background,
@@ -195,3 +196,43 @@ class TestResultReporting:
         _, result = clean_background(product_shot)
         with pytest.raises(Exception):  # noqa: B017 - frozen dataclass raises FrozenInstanceError
             result.cleaned = False
+
+
+class TestPixelAccessNarrowing:
+    """The mode assumptions that make the annotations true (#3).
+
+    ``py.typed`` ships in the wheel, so these annotations are a promise to
+    every consumer's type checker rather than a note to ourselves. What a
+    subscript on ``Image.load()`` yields depends on the image's mode, and both
+    loaders below claim one — so the claim is asserted at runtime, not trusted.
+    A ``# type: ignore`` here would have silenced the checker without recording
+    what it was silenced for, and without failing when the assumption stopped
+    holding.
+    """
+
+    def test_the_rgb_loader_refuses_an_image_that_is_not_rgb(self):
+        with pytest.raises(ValueError, match="expected an RGB image"):
+            background._rgb_pixels(Image.new("L", (4, 4)))
+
+    def test_the_grey_loader_refuses_an_image_that_is_not_grey(self):
+        with pytest.raises(ValueError, match="expected an L image"):
+            background._grey_pixels(Image.new("RGB", (4, 4)))
+
+    def test_the_rgb_loader_yields_the_triple_its_type_promises(self):
+        pixels = background._rgb_pixels(Image.new("RGB", (4, 4), (12, 34, 56)))
+        assert pixels[0, 0] == (12, 34, 56)
+
+    def test_the_grey_loader_yields_the_level_its_type_promises(self):
+        pixels = background._grey_pixels(Image.new("L", (4, 4), 200))
+        assert pixels[0, 0] == 200
+
+    def test_the_border_reader_only_accepts_what_makes_its_return_type_true(self):
+        """``_border_pixels`` is annotated ``list[tuple[int, int, int]]``.
+
+        That is only true of an RGB image, and its one caller converts before
+        calling. Nothing but this assertion stops a second caller skipping the
+        conversion and getting bare levels back under an annotation promising
+        triples.
+        """
+        with pytest.raises(ValueError, match="expected an RGB image"):
+            background._border_pixels(Image.new("L", (4, 4)))

@@ -95,11 +95,19 @@ python -m pip install -e ".[dev]"
 python -m pytest
 python -m ruff check src/ tests/
 python -m ruff format --check src/ tests/
+python -m mypy --strict src/mullion
 ```
 
-All four before you push. CI runs the same commands, and the two ruff ones run
+All five before you push. CI runs the same commands, and the two ruff ones run
 *before* the tests — a formatting slip fails the job before a single test
 executes.
+
+`mypy --strict` is not optional politeness. The wheel ships `src/mullion/py.typed`
+and pyproject declares `Typing :: Typed`, which together tell every consumer's
+type checker to **trust these annotations** rather than infer around them. A
+wrong one does not raise here — it makes somebody else's `mypy` run confidently
+green about the wrong thing, which is the quietest way a library can break a
+caller.
 
 ### A test has to be able to fail
 

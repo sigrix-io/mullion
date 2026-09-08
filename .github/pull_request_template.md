@@ -32,5 +32,6 @@ Say which mutation you tried and which test caught it.
 - [ ] `python -m pytest`
 - [ ] `python -m ruff check src/ tests/`
 - [ ] `python -m ruff format --check src/ tests/`
+- [ ] `python -m mypy --strict src/mullion`
 - [ ] Scope: this still handles *one* image (see CONTRIBUTING)
 - [ ] `CHANGELOG.md` updated under `Unreleased`, if this is user-visible
