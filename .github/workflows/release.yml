@@ -1,0 +1,148 @@
+# Publish a tagged release to PyPI. Nothing else in this repository publishes,
+# and nothing in this file runs on a branch — a release is a tag, deliberately,
+# so that publishing is an act with a name rather than a side effect of a merge.
+#
+# Trusted publishing (OIDC) rather than an API token: the runner exchanges a
+# short-lived identity for an upload, so there is no long-lived secret in this
+# repository to store, leak or rotate. The trade is that PyPI has to be told
+# which workflow in which environment it trusts, which is configuration that
+# lives there and not here — see the note on `environment:` below.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+# Read-only by default. Only the publish job widens this, and only to the one
+# permission the OIDC exchange needs.
+permissions:
+  contents: read
+
+# Deliberately NOT `cancel-in-progress`, which is what ci.yml sets. Cancelling
+# a CI run wastes a runner; cancelling a run that is mid-upload can leave a
+# release half-landed, and a PyPI version number can never be reused — not even
+# after deleting the file. There is nothing to gain here by being fast.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Everything that can say no, said before anything leaves the runner.
+  build:
+    runs-on: ubuntu-latest
+    # A fork can push a tag to itself; it must not be able to build the
+    # artifacts this repository's trust policy would then be asked to publish.
+    if: github.repository == 'sigrix-io/mullion'
+    steps:
+      # checkout and setup-python track ci.yml's pins on purpose, rather than
+      # the newest majors: this workflow runs once per release, at the moment
+      # when discovering an action's breaking change is most expensive, so it
+      # should run on the versions the rest of the repository has exercised.
+      # Dependabot moves both files together.
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - run: python -m pip install build twine
+      - run: python -m build
+
+      # hatchling reads the version out of pyproject.toml; the tag is typed by
+      # hand. Nothing makes them agree. Tagging v0.2.0 without bumping
+      # pyproject builds 0.1.0 and would publish it under a tag saying
+      # otherwise — or, if 0.1.0 is already on PyPI, fail at the upload with a
+      # duplicate-file error naming neither cause. Ask here instead, where the
+      # answer is still cheap.
+      - name: The tag names the version that was actually built
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          # mullion-0.1.0-py3-none-any.whl -> 0.1.0. A wheel filename uses "-"
+          # as its field separator, so a PEP 440 version can never contain one.
+          built="$(basename "$(ls dist/*.whl)" | cut -d- -f2)"
+          echo "tag=${tag}  built=${built}"
+          if [ "${tag}" != "${built}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not name the packaged version ${built}. Bump pyproject.toml, or delete the tag and retag."
+            exit 1
+          fi
+
+      # A release nobody wrote down is one a dependent cannot evaluate, which
+      # is the whole promise VERSIONING.md makes while this is 0.x. Keep a
+      # Changelog puts the version in a heading, so this is an exact check
+      # rather than a guess at prose.
+      - name: The changelog has an entry for this version
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if ! grep -qF "## [${version}]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [${version}]' heading. Move the Unreleased entries under it before tagging."
+            exit 1
+          fi
+
+      # Catches a README that renders on GitHub and not on PyPI, which is
+      # otherwise found at the moment of publishing and not before.
+      - run: python -m twine check dist/*
+
+      # ci.yml proves the *source tree* passes, via an editable install. This
+      # proves the *artifact* does, which is a different question and the only
+      # one that still matters once the bytes are immutable on PyPI: a file
+      # missing from the wheel is invisible to every editable-install run.
+      - name: The built wheel installs, imports, and passes the suite
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/releasecheck
+          /tmp/releasecheck/bin/python -m pip install --quiet dist/*.whl pytest
+          # From /tmp, so nothing in the checkout can satisfy the import.
+          cd /tmp
+          /tmp/releasecheck/bin/python -c "
+          import mullion, pathlib
+          root = pathlib.Path(mullion.__file__).parent
+          assert (root / 'py.typed').exists(), 'py.typed did not ship'
+          for name in mullion.__all__:
+              assert hasattr(mullion, name), name
+          print(mullion.__version__, '-', len(mullion.__all__), 'exports resolve')
+          "
+          cd "${GITHUB_WORKSPACE}"
+          # src-layout means ./mullion does not exist, so the import below can
+          # only resolve to the wheel in the venv. Asserted rather than assumed:
+          # a suite that quietly re-tested the source tree would look identical.
+          /tmp/releasecheck/bin/python -c "
+          import mullion
+          assert 'site-packages' in mullion.__file__, mullion.__file__
+          "
+          /tmp/releasecheck/bin/python -m pytest tests/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  # Separate from the build so that a failure above cannot half-publish: this
+  # job does not start unless every check passed, and it builds nothing itself.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      # PyPI's trusted-publisher policy names this environment alongside the
+      # repository and the workflow filename, so the three have to match what
+      # is configured there. It is also where to add a required reviewer if a
+      # release should ever need a second pair of eyes.
+      name: pypi
+      url: https://pypi.org/p/mullion
+    permissions:
+      # The only elevated permission in this file, scoped to the one job that
+      # needs it. This mints the OIDC token PyPI exchanges for an upload, and
+      # it is also what makes the action attach PEP 740 attestations.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      # Pinned to the commit rather than the tag. A tag is mutable by whoever
+      # owns the action, and this is the one step in this repository holding a
+      # credential worth stealing. Dependabot bumps the pin and rewrites the
+      # trailing comment with it.
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
