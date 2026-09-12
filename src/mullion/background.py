@@ -65,6 +65,23 @@ DEFAULT_BORDER_TOLERANCE = 232
 # off the edge of an otherwise white product shot should not disqualify it.
 DEFAULT_BORDER_COVERAGE = 0.55
 
+# Longest edge, in pixels, at or below which the flood runs at full resolution.
+# Above it the flood is done on a downscaled copy -- see ``_background_mask``.
+#
+# Private on purpose. It is a performance/precision knob, not a description of
+# the result, and every value of it that a caller could reasonably want is
+# already the default: below the cap nothing changes, and above it the answer
+# stays within a fraction of a percent of the full-resolution one.
+#
+# What the cap costs, measured rather than reasoned about: a wall separating an
+# enclosed near-white region from the background survives the downscale when it
+# is roughly 1.5x the scale factor or thicker. Because the factor tracks the
+# image, that limit is scale-invariant -- about 0.15% of the longest edge, at
+# any size. A gap thinner than that closes, and the region behind it is cleaned
+# as though it were background. 1024 keeps the flood near a second on any input
+# while leaving that limit at a hairline: 9px on a 24MP photo.
+_FLOOD_MAX_EDGE = 1024
+
 
 class BackgroundCleanMode(StrEnum):
     """What the detected background region becomes."""
@@ -193,21 +210,20 @@ def looks_like_white_background(
     return (near_white / len(frame)) >= border_coverage
 
 
-def _background_mask(image: PILImage, *, tolerance: int) -> tuple[PILImage, float]:
-    """A mask of the edge-connected near-white region, and its area ratio.
+def _reached_region(candidates: PILImage) -> PILImage:
+    """The candidates in ``candidates`` reachable by a flood from the border.
 
-    White in the mask means background. Built by flood-filling a scratch canvas
-    inward from every border pixel that is already near-white, so interior
-    highlights of the same colour are unreachable and survive.
+    ``candidates`` is 255 where a pixel may become background and 0 where it is
+    a wall. The return is 255 for exactly the reached region.
+
+    This is the expensive half of the module and the reason for
+    :func:`_flood_scale`: ``ImageDraw.floodfill`` is pure Python — 63 lines
+    walking the region a pixel at a time — so it costs roughly 1.6 seconds per
+    megapixel where everything around it is vectorised C and free.
     """
     from PIL import ImageDraw
 
-    width, height = image.size
-    greyscale = image.convert("L")
-
-    # Everything near-white starts as a fill candidate (255); everything else
-    # is a wall (0). The flood then decides which candidates are edge-connected.
-    candidates = greyscale.point(lambda level: 255 if level >= tolerance else 0)
+    width, height = candidates.size
 
     # Pillow's floodfill spreads across equal-ish values, so seeding a third
     # value (128) marks exactly the reached region and leaves unreachable
@@ -232,7 +248,82 @@ def _background_mask(image: PILImage, *, tolerance: int) -> tuple[PILImage, floa
         if working_pixels[seed] == 255:
             ImageDraw.floodfill(working, seed, 128, thresh=0)
 
-    mask = working.point(lambda level: 255 if level == 128 else 0)
+    return working.point(lambda level: 255 if level == 128 else 0)
+
+
+def _flood_scale(size: tuple[int, int]) -> int:
+    """The integer factor the flood runs at for an image of ``size``.
+
+    ``1`` means full resolution, which is every image whose longest edge is
+    already within :data:`_FLOOD_MAX_EDGE` — so nothing about a thumbnail, an
+    avatar or a web-sized upload changes. Above that the factor is whatever
+    brings the longest edge back under the cap, which makes the flood cost
+    roughly constant instead of linear in pixels.
+    """
+    longest = max(size)
+    if longest <= _FLOOD_MAX_EDGE:
+        return 1
+    return -(-longest // _FLOOD_MAX_EDGE)  # ceil, without importing math
+
+
+def _background_mask(image: PILImage, *, tolerance: int) -> tuple[PILImage, float]:
+    """A mask of the edge-connected near-white region, and its area ratio.
+
+    White in the mask means background. Built by flood-filling a scratch canvas
+    inward from every border pixel that is already near-white, so interior
+    highlights of the same colour are unreachable and survive.
+
+    Above :data:`_FLOOD_MAX_EDGE` the flood runs on a downscaled copy and only
+    the *connectivity* answer is taken from it; membership stays full
+    resolution, because the reached region is intersected back with the
+    full-resolution candidates. That ordering is what keeps the downscale from
+    ever eating the subject: a pixel that is not near-white at full resolution
+    cannot be cleaned no matter what the small copy says about it.
+    """
+    from PIL import Image, ImageChops
+
+    width, height = image.size
+    greyscale = image.convert("L")
+
+    # Everything near-white starts as a fill candidate (255); everything else
+    # is a wall (0). The flood then decides which candidates are edge-connected.
+    candidates = greyscale.point(lambda level: 255 if level >= tolerance else 0)
+
+    factor = _flood_scale((width, height))
+    if factor == 1:
+        mask = _reached_region(candidates)
+    else:
+        # ``reduce`` averages each factor x factor block, so the threshold
+        # below is a vote: a block is background when more than half of it is.
+        #
+        # A vote rather than "every pixel in the block", which was written
+        # first and measured worse by a wide margin. The strict rule preserves
+        # a one-pixel wall, but a real photographed background is not clean --
+        # JPEG noise scatters sub-tolerance pixels through it, each one turning
+        # its whole block into a wall. At 10% noise the strict rule agreed with
+        # the full-resolution mask on 26% of pixels, having disconnected the
+        # background into islands it then refused to flood; the vote held at
+        # 99.9% across every noise level and factor tried.
+        small = candidates.reduce(factor).point(lambda level: 255 if level >= 128 else 0)
+        reached = _reached_region(small)
+
+        if not reached.getbbox():
+            # Nothing was reachable in the small copy while the full-resolution
+            # frame said there was a background to find -- a border that is
+            # near-white in a line thinner than one block. Pathological for a
+            # photograph, and cheaper to spend the full-resolution flood on
+            # than to answer wrongly.
+            mask = _reached_region(candidates)
+        else:
+            # NEAREST, not a smooth filter: this is a region, and interpolating
+            # its edge would invent partial values the threshold below would
+            # have to guess at. The intersection is what makes the coarse edge
+            # harmless -- it trims the upscaled blocks back to the pixels that
+            # were near-white all along.
+            mask = ImageChops.darker(
+                reached.resize((width, height), Image.Resampling.NEAREST),
+                candidates,
+            )
 
     histogram = mask.histogram()
     background_pixels = histogram[255] if len(histogram) > 255 else 0

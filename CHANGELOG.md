@@ -7,6 +7,30 @@ pre-1.0 means what it says.
 
 ## [Unreleased]
 
+### Fixed
+
+- `clean_background()` no longer costs a second per megapixel. Above a longest
+  edge of 1024px the flood runs on a reduced copy, which took a 24MP
+  photograph from 38.8s to 2.7s and a 12MP one from 18.2s to 1.9s on the same
+  machine; below that nothing changed. `ImageDraw.floodfill` is pure Python and
+  was the whole cost — profiling a 12MP call put a single flood at 18.7s of it,
+  with every vectorised step around it under a tenth of a second. A caller
+  composing a page from a folder of phone-sized photographs was spending
+  minutes inside a request.
+
+  Only the *connectivity* answer comes from the reduced copy; membership stays
+  full resolution, because the reached region is intersected back with the
+  full-resolution candidates. That ordering is what keeps a pixel that is not
+  near-white from ever being cleaned, however coarse the small copy is.
+
+  What it costs, measured rather than reasoned about: a wall separating an
+  enclosed near-white region from the background survives while it is roughly
+  1.5x the scale factor or thicker. The factor tracks the image, so that limit
+  is scale-invariant — about 0.15% of the longest edge at any size, or 9px on a
+  24MP photo. A gap thinner than that closes and the region behind it is
+  cleaned as background.
+  ([#9](https://github.com/sigrix-io/mullion/issues/9))
+
 ## [0.1.0]
 
 First release.
