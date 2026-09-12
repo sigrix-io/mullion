@@ -68,16 +68,60 @@ jobs:
 
       # A release nobody wrote down is one a dependent cannot evaluate, which
       # is the whole promise VERSIONING.md makes while this is 0.x. Keep a
-      # Changelog puts the version in a heading, so this is an exact check
-      # rather than a guess at prose.
-      - name: The changelog has an entry for this version
+      # Changelog puts the version in a heading, so both halves below are exact
+      # checks rather than guesses at prose.
+      #
+      # The second half exists because the first is not enough on its own: the
+      # 0.1.0 heading was present and correct while two shipped changes sat
+      # under [Unreleased], and a heading check cannot see that. Anything still
+      # filed as unreleased is on the commit being tagged, so it goes out in
+      # this release while the changelog says it did not.
+      - name: The changelog names this version, and nothing is left unreleased
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          if ! grep -qF "## [${version}]" CHANGELOG.md; then
-            echo "::error::CHANGELOG.md has no '## [${version}]' heading. Move the Unreleased entries under it before tagging."
-            exit 1
-          fi
+          export VERSION="${GITHUB_REF_NAME#v}"
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          version = os.environ["VERSION"]
+          text = pathlib.Path("CHANGELOG.md").read_text()
+
+
+          def fail(message: str) -> None:
+              # stdout, not stderr: that is where GitHub reads ::error:: from.
+              print(message)
+              raise SystemExit(1)
+
+
+          if f"## [{version}]" not in text:
+              fail(
+                  f"::error::CHANGELOG.md has no '## [{version}]' heading. Add it, or "
+                  "move the Unreleased entries under it, before tagging."
+              )
+
+          # The heading itself stays -- Keep a Changelog keeps it between
+          # releases. Only its contents are wrong at tag time.
+          section = re.search(
+              r"^##\s*\[Unreleased\]\s*$(.*?)(?=^##\s|\Z)",
+              text,
+              re.MULTILINE | re.DOTALL,
+          )
+          if section:
+              leftover = [
+                  line
+                  for line in section.group(1).splitlines()
+                  if line.strip() and not line.lstrip().startswith("#")
+              ]
+              if leftover:
+                  fail(
+                      f"::error::CHANGELOG.md still files {len(leftover)} line(s) under "
+                      f"[Unreleased], starting {leftover[0].strip()[:60]!r}. They are on "
+                      f"the commit being tagged, so they ship in {version} -- move them "
+                      f"under '## [{version}]' before tagging."
+                  )
+          PY
 
       # Catches a README that renders on GitHub and not on PyPI, which is
       # otherwise found at the moment of publishing and not before.
