@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/social-preview.png" alt="Mullion — one correct way to open an image" width="800">
+</p>
+
 # Mullion
 
 **One correct way to open an image.** EXIF orientation applied, transparency
