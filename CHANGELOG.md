@@ -7,6 +7,8 @@ pre-1.0 means what it says.
 
 ## [Unreleased]
 
+## [0.1.1]
+
 ### Fixed
 
 - `clean_background()` no longer costs a second per megapixel. Above a longest
@@ -30,6 +32,16 @@ pre-1.0 means what it says.
   24MP photo. A gap thinner than that closes and the region behind it is
   cleaned as background.
   ([#9](https://github.com/sigrix-io/mullion/issues/9))
+
+- The README's links and its cover image are absolute URLs. `pyproject.toml`
+  sets `readme = "README.md"`, so that file is the long description PyPI
+  renders — and PyPI resolves a relative path against `pypi.org`, not against
+  the repository. Every one of them 404'd on the package page: the cover
+  image, and the links to `VERSIONING.md`, `CONTRIBUTING.md`, `SECURITY.md`,
+  `LICENSE` and the issue tracker. The first of those matters most, since the
+  README asks a reader to open `VERSIONING.md` before pinning and pre-1.0 is
+  when that advice counts. `twine check` passes either way — it checks that
+  the markup renders, not that what it points at exists — so a test now does.
 
 ## [0.1.0]
 

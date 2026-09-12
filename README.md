@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/social-preview.png" alt="Mullion — one correct way to open an image" width="800">
+  <img src="https://raw.githubusercontent.com/sigrix-io/mullion/main/.github/social-preview.png" alt="Mullion — one correct way to open an image" width="800">
 </p>
 
 # Mullion
@@ -169,17 +169,17 @@ several is the application's job.**
 ## Versioning
 
 Pre-1.0. Nothing is stable, and any `0.x` release may break any other — see
-[VERSIONING.md](VERSIONING.md), which is blunt about what that means. If you are
-building on `0.x`, please [open an issue](../../issues) saying so; the practical
+[VERSIONING.md](https://github.com/sigrix-io/mullion/blob/main/VERSIONING.md), which is blunt about what that means. If you are
+building on `0.x`, please [open an issue](https://github.com/sigrix-io/mullion/issues) saying so; the practical
 difference between an announced breaking change and a surprising one is knowing
 somebody is out there.
 
 ## Contributing
 
-[CONTRIBUTING.md](CONTRIBUTING.md) is candid about what a small team can promise.
+[CONTRIBUTING.md](https://github.com/sigrix-io/mullion/blob/main/CONTRIBUTING.md) is candid about what a small team can promise.
 Security findings go to **security@sigrix.io** and never to a public issue —
-[SECURITY.md](SECURITY.md).
+[SECURITY.md](https://github.com/sigrix-io/mullion/blob/main/SECURITY.md).
 
 ## Licence
 
-[Apache-2.0](LICENSE).
+[Apache-2.0](https://github.com/sigrix-io/mullion/blob/main/LICENSE).
