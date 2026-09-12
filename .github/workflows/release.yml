@@ -39,8 +39,8 @@ jobs:
       # when discovering an action's breaking change is most expensive, so it
       # should run on the versions the rest of the repository has exercised.
       # Dependabot moves both files together.
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
