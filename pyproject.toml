@@ -32,7 +32,7 @@ classifiers = [
 dependencies = ["pillow>=10.0"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff==0.16.5", "mypy==2.3.1"]
+dev = ["pytest>=8.0", "ruff==0.16.6", "mypy==2.3.1"]
 
 [project.urls]
 Homepage = "https://github.com/sigrix-io/mullion"
@@ -71,8 +71,10 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# assert is the whole vocabulary of a test.
-"tests/**/*.py" = ["S101"]
+# assert is the whole vocabulary of a test. S311 goes with it: a fixture that
+# scatters reproducible noise through a background wants a seeded `Random`,
+# which is the opposite of the unpredictability S311 is asking after.
+"tests/**/*.py" = ["S101", "S311"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["mullion"]
