@@ -145,3 +145,45 @@ class TestAdapters:
     def test_unreadable_data_raises_rather_than_returning_something(self):
         with pytest.raises(Exception):  # noqa: B017 - Pillow's own type is not part of the contract
             open_bytes(b"this is not an image")
+
+
+class TestWhatTheAdaptersCloseOver:
+    """The documented rule about inspecting the source, pinned.
+
+    Not a regression guard — this is a property of the ``with`` block the
+    adapters are built on, and the right behaviour. It is here so the rule and
+    the code cannot drift apart, because the way it goes wrong is silent: a
+    caller that asks ``open_bytes(...)`` for ``n_frames`` is told ``1``, stores
+    one frame of an animation, and nothing raises. The re-encode succeeds and
+    the bytes are a valid image; only the motion is gone.
+    """
+
+    @staticmethod
+    def _animated_gif() -> bytes:
+        frames = [Image.new("RGB", (8, 8), colour) for colour in ((200, 30, 30), (30, 30, 200))]
+        buffer = BytesIO()
+        frames[0].save(
+            buffer, format="GIF", save_all=True, append_images=frames[1:], duration=100, loop=0
+        )
+        return buffer.getvalue()
+
+    def test_the_source_really_is_animated(self):
+        """The canary. Without it the two assertions below pass on a still GIF."""
+        with Image.open(BytesIO(self._animated_gif())) as source:
+            assert getattr(source, "n_frames", 1) == 2
+            assert source.format == "GIF"
+
+    def test_an_adapter_cannot_answer_what_only_the_source_knew(self):
+        image = open_bytes(self._animated_gif())
+
+        assert getattr(image, "n_frames", 1) == 1
+        assert image.format is None
+
+    def test_normalize_leaves_the_caller_holding_the_source(self):
+        """Which is the whole difference, and the documented way round it."""
+        with Image.open(BytesIO(self._animated_gif())) as source:
+            animated = getattr(source, "n_frames", 1) > 1
+            image = normalize(source)
+
+        assert animated, "the caller can still see what arrived"
+        assert getattr(image, "n_frames", 1) == 1, "while the result is a still copy"
