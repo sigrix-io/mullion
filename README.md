@@ -92,6 +92,31 @@ a bytes-only API forces a batch tool to read every file into memory first.
 an opaque destination wants. `keep_alpha=True` returns `RGBA`, for a caller that
 will composite itself or write a cutout. Neither mutates the input.
 
+**The adapters close the source before you see it.** Everything here returns a
+new image, so nothing you could have read off the original survives on the
+result — `n_frames` is `1` whatever the source held, and `format` is `None`.
+With `normalize` that costs nothing, because you still hold the source and can
+read it either side of the call. With `open_bytes` and `open_path` there is no
+source to hold, so a caller that needs to *inspect* what arrived has to open it
+itself:
+
+```python
+# Wrong, and quiet: every animation reports one frame, the re-encode
+# succeeds, and only the motion is missing.
+image = open_bytes(payload)
+if getattr(image, "n_frames", 1) > 1:
+    raise Refused("animated uploads are not accepted")
+
+# Right: read the source while you still have it.
+with Image.open(BytesIO(payload)) as source:
+    if getattr(source, "n_frames", 1) > 1:
+        raise Refused("animated uploads are not accepted")
+    image = normalize(source)
+```
+
+The rule in one line: **want pixels, use an adapter; want to know what arrived,
+use `normalize` and open it yourself.**
+
 ### `mullion.background` — clean a near-white background
 
 A "white" background is rarely `#FFFFFF`. It is `#FBFBFA` from a scanner,

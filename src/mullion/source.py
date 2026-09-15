@@ -105,6 +105,16 @@ def normalize(
     caller that will composite itself or write a cutout.
 
     Always returns a new image; the input is never mutated.
+
+    Because it is a new image, nothing you could have read off the source
+    survives on the result — ``n_frames`` is ``1`` whatever the source held,
+    and ``format`` is ``None``. That is only a trap for the adapters below,
+    which close the source before you see it; a caller of ``normalize`` still
+    holds the original and can read from it either side of this call::
+
+        with Image.open(BytesIO(payload)) as source:
+            animated = getattr(source, "n_frames", 1) > 1
+            image = normalize(source, keep_alpha=True)
     """
     from PIL import ImageOps
 
@@ -138,6 +148,14 @@ def open_bytes(
 
     Raises whatever ``Image.open`` raises for data that is not an image —
     callers that treat an unreadable upload as a refusal already handle it.
+
+    **Opens and closes the source inside this call**, so anything only the
+    source could answer is gone by the time you get the result: ``n_frames``
+    reads ``1`` for an animation, and ``format`` reads ``None``. A caller that
+    refuses animated uploads, or branches on the incoming format, wants
+    :func:`normalize` and its own ``Image.open`` instead. Getting this wrong is
+    quiet rather than loud — a re-encode of the one frame succeeds and the
+    bytes are a valid image.
     """
     from PIL import Image
 
@@ -154,7 +172,9 @@ def open_path(
     """Open the image at ``path``, normalized.
 
     The adapter a batch or desktop tool wants. The file handle is closed before
-    this returns; see :func:`normalize` for why that is safe.
+    this returns; see :func:`normalize` for why that is safe, and for what it
+    costs — as with :func:`open_bytes`, a caller that needs ``n_frames``,
+    ``format`` or anything else off the source must open it itself.
     """
     from PIL import Image
 

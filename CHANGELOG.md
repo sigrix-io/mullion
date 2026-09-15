@@ -7,6 +7,21 @@ pre-1.0 means what it says.
 
 ## [Unreleased]
 
+### Changed
+
+- `open_bytes()` and `open_path()` document what they close over. Both open the
+  source inside the call and return a converted copy, so nothing only the source
+  could answer survives on the result — `n_frames` reads `1` for an animation
+  and `format` reads `None`. No behaviour changed; this was true since the
+  adapters were written and nothing said so, which matters because the way it
+  goes wrong is the kind this library exists to remove: a caller refusing
+  animated uploads is told `1`, stores one frame, and nothing raises. The rule
+  is now in both docstrings, in `normalize()`'s, and in the README — want
+  pixels, use an adapter; want to know what arrived, use `normalize()` and open
+  the source yourself. Pinned by tests, with a canary so a still fixture cannot
+  make them pass vacuously.
+  ([#18](https://github.com/sigrix-io/mullion/issues/18))
+
 ## [0.1.1]
 
 ### Fixed
