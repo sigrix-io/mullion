@@ -4,9 +4,9 @@
 
 # Mullion
 
-**One correct way to open an image.** EXIF orientation applied, transparency
-resolved rather than dropped, and a background cleaner that does not eat the
-subject.
+**One correct way to open an image — and to write it back out.** EXIF
+orientation applied, transparency resolved rather than dropped at both ends,
+and a background cleaner that does not eat the subject.
 
 A mullion is the upright that divides a window into panes — one stone member,
 every pane set against it. That is the argument of this library: an application
@@ -14,10 +14,13 @@ that opens user images in six places gets six different answers, and the fix is
 one member they all lean on.
 
 ```python
-from mullion import open_bytes, open_path
+from mullion import contain, encode, open_bytes, watermark
 
-image = open_bytes(upload.read())        # RGB, upright, no black rectangle
+image = open_bytes(upload.read())          # RGB, upright, no black rectangle
 avatar = open_path(path, keep_alpha=True)  # RGBA preserved
+
+hero = watermark(contain(image, (1280, 720)), "example.com")
+body = encode(hero, "JPEG", quality=88)    # composited, not blackened
 ```
 
 ## The defect this exists for
@@ -117,6 +120,30 @@ with Image.open(BytesIO(payload)) as source:
 The rule in one line: **want pixels, use an adapter; want to know what arrived,
 use `normalize` and open it yourself.**
 
+### `mullion.resize` — fit to a box, contain or cover
+
+Pillow has three spellings for this and they do not agree. `thumbnail` mutates
+in place and returns `None`, so `smaller = image.thumbnail(box)` binds nothing
+and edits the image somebody else is holding. `resize` always scales, so a
+caller who meant "no bigger than 800px" upscales a 200px upload and ships a
+blurred picture. And `ImageOps.fit` is named fit and *crops*.
+
+So these two are named for what they do to the content, in the vocabulary CSS
+settled on:
+
+```python
+from mullion import contain, cover
+
+thumb = contain(image, (400, 400))            # all of it, may leave space
+card = cover(image, (1200, 630))              # fills exactly, may cut
+face = cover(image, (400, 400), centering=(0.5, 0.0))   # keep the top
+```
+
+`contain` does not upscale unless you pass `upscale=True`, and both return a
+new image. `contain` is built on `thumbnail`, so moving an existing
+`image.thumbnail(box, LANCZOS)` call onto it gives the same pixels, not merely
+a similar picture.
+
 ### `mullion.background` — clean a near-white background
 
 A "white" background is rarely `#FFFFFF`. It is `#FBFBFA` from a scanner,
@@ -154,6 +181,65 @@ every keyword argument of both halves, and `keeps_alpha()` already names the one
 coupling between them — opening without it flattens an existing cutout onto
 white *before* cleaning, which leaves a pale fringe on the anti-aliased edges.
 
+### `mullion.watermark` — a mark that survives a bright sky
+
+```python
+from mullion import watermark
+
+marked = watermark(hero, "example.com")       # bottom-right, RGBA out
+```
+
+Sized against the image's **shorter** side with clamps at both ends, so it is
+neither illegible on a thumbnail nor billboard-sized on a large render, and so
+a portrait and a landscape version of the same picture get the same visual
+weight. Drawn over a soft offset halo in the opposite ink — without it, white
+type disappears into a bright sky and reads as a rendering fault.
+
+Everything about the look is a `WatermarkStyle`, which is frozen and has the
+measured defaults; pass your own for a different corner, ink or scale, or pass
+`font=` to bring your own face. Empty text returns the image unchanged, because
+"do not mark" is a legitimate thing for a caller's configuration to say.
+
+It takes and returns an image rather than bytes on purpose: the mark belongs
+*between* the resize and the encode. Marking first resamples the type along
+with the picture and softens it; marking after the encode means decoding the
+output again.
+
+### `mullion.encode` — the black rectangle, on the way out
+
+An `RGBA` image handed to a JPEG encoder raises `cannot write mode RGBA as
+JPEG`, which is loud and therefore fine — except for what it provokes. The
+obvious repair reads like a type fix and is the defect this library exists for,
+reintroduced at the other end of the pipeline:
+
+```python
+image.convert("RGB").save(buffer, format="JPEG")   # black rectangle, again
+```
+
+`encode` is the pair to `open_bytes`. The caller says what they are writing,
+not what mode the image needs to be in:
+
+```python
+from mullion import encode, supports_alpha
+
+body = encode(image, "JPEG", quality=88, optimize=True)  # composited, not blackened
+body = encode(image, "WEBP", quality=82, method=6)       # alpha kept
+body = encode(page_image, "PNG", dpi=(page.dpi, page.dpi))
+
+supports_alpha("PNG")     # True
+supports_alpha("JPEG")    # False
+```
+
+Which formats can carry alpha is asked of Pillow — by writing one transparent
+pixel and seeing whether the encoder objects — rather than answered from a
+table kept here, because the table would be wrong in both directions: AVIF
+depends on a plugin that may not be installed, and a format added in a later
+Pillow would go unrecognised by a library that thinks it knows them all.
+
+> "Can carry an alpha channel" is not "carries yours faithfully". GIF answers
+> `True` and has exactly one bit of it, so a soft edge is snapped rather than
+> composited. If that matters, flatten deliberately with `flatten_onto`.
+
 ### `mullion.page` — page geometry and DPI
 
 3000 px is 10 inches at 300 DPI and 41.7 inches at 72. Nothing in a file says
@@ -185,11 +271,21 @@ Not a general imaging toolkit. Pillow already is one, and this library is a thin
 correctness layer over it, not a wrapper around it — you get a real
 `PIL.Image.Image` back and do whatever you like with it.
 
-Specifically out of scope: resizing and cropping (`ImageOps.fit` and friends
-already do this well), format conversion, colour management, subject-aware or
-model-based background removal, and laying multiple images out on a page. That
-last one is where the line falls: **this library handles one image; composing
-several is the application's job.**
+Specifically out of scope: colour management, subject-aware or model-based
+background removal, and laying multiple images out on a page. That last one is
+where the line falls: **this library handles one image; composing several is
+the application's job.**
+
+Two things that used to be on that list are now in the library, and the reason
+is worth stating rather than quietly editing out. Resizing was excluded because
+"`ImageOps.fit` and friends already do this well" — which was the same mistake
+this library exists to correct, one level up: there are three spellings, they
+disagree, and the disagreement is quiet. And encoding was excluded as "format
+conversion", which it is not: choosing what happens to an alpha channel the
+target format cannot hold is the *same* transparency decision `open_bytes`
+makes, arriving at the other end of the pipeline. Both were drawn the way a
+scope line usually is, from the shape of the code rather than from where the
+defects were.
 
 ## Versioning
 

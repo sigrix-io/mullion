@@ -1,4 +1,4 @@
-"""Mullion — get an image in correctly, once.
+"""Mullion — get an image in correctly, and back out again.
 
 A mullion is the upright that divides a window into panes: one stone member,
 every pane set against it. The name is the point of the library. Every
@@ -13,18 +13,38 @@ Nothing about that failure is loud. The response is a 200, the picture renders,
 the layout is right. It is only *wrong*, in a way a status-code test cannot see
 and a reviewer looking at one image at a time will not catch.
 
-So this library is deliberately small, and does the three things that keep
-coming back:
+So this library is deliberately small, and does the handful of things that keep
+coming back. On the way in:
 
 :mod:`mullion.source`
     One correct open — EXIF orientation applied, transparency resolved rather
     than dropped — with adapters for the two things callers actually hold:
     ``bytes`` from object storage and a filesystem path.
 
+On the way through:
+
+:mod:`mullion.resize`
+    :func:`contain` and :func:`cover`, named for what they do to the content,
+    because Pillow's three spellings do not agree: one mutates in place and
+    returns ``None``, one upscales when you meant "no bigger than", and the
+    one called ``fit`` crops.
+
 :mod:`mullion.background`
     Border-seeded background cleaning, so a near-white product shot sits flush
     on a white surface without a global threshold eating the subject's own
     highlights.
+
+:mod:`mullion.watermark`
+    A discreet text mark, sized against the shorter side with clamps at both
+    ends, over a halo so it survives a bright sky.
+
+And on the way out:
+
+:mod:`mullion.encode`
+    The pair to the open. A format that cannot carry an alpha channel gets the
+    transparency composited rather than dropped — which is where the black
+    rectangle comes back, in the shape of an innocent-looking repair for
+    ``cannot write mode RGBA as JPEG``.
 
 :mod:`mullion.page`
     Page geometry and DPI, so "A4 at 300" resolves to pixels that agree with
@@ -36,15 +56,13 @@ imports at module scope and opens images rarely, does not pay for it at start-up
 
 Quick start::
 
-    from mullion import open_bytes, open_path, clean_background, keeps_alpha
+    from mullion import contain, encode, open_bytes, watermark
 
     image = open_bytes(upload.read())              # RGB, upright, no black box
     avatar = open_path(p, keep_alpha=True)         # RGBA preserved
 
-    mode = "flatten"
-    shot = open_path(p, keep_alpha=keeps_alpha(mode))
-    cleaned, result = clean_background(shot, mode=mode)
-    print(result.message)
+    hero = watermark(contain(image, (1280, 720)), "example.com")
+    body = encode(hero, "JPEG", quality=88)        # flattened, not blackened
 """
 
 from __future__ import annotations
@@ -59,6 +77,7 @@ from .background import (
     keeps_alpha,
     looks_like_white_background,
 )
+from .encode import encode, supports_alpha
 from .page import (
     DEFAULT_DPI,
     MM_PER_INCH,
@@ -70,6 +89,7 @@ from .page import (
     to_pixels,
     validate_dpi,
 )
+from .resize import Box, contain, cover
 from .source import (
     WHITE,
     Matte,
@@ -79,24 +99,32 @@ from .source import (
     open_bytes,
     open_path,
 )
+from .watermark import DEFAULT_WATERMARK_STYLE, Corner, WatermarkStyle, watermark
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 __all__ = [
     "DEFAULT_BORDER_COVERAGE",
     "DEFAULT_BORDER_TOLERANCE",
     "DEFAULT_DPI",
     "DEFAULT_TOLERANCE",
+    "DEFAULT_WATERMARK_STYLE",
     "MM_PER_INCH",
     "NAMED_PAGE_SIZES_MM",
     "WHITE",
     "BackgroundCleanMode",
+    "Box",
     "CleanResult",
+    "Corner",
     "Matte",
     "PageGeometry",
     "PageUnit",
+    "WatermarkStyle",
     "__version__",
     "clean_background",
+    "contain",
+    "cover",
+    "encode",
     "flatten_onto",
     "has_transparency",
     "keeps_alpha",
@@ -106,6 +134,8 @@ __all__ = [
     "open_bytes",
     "open_path",
     "resolve_page_geometry",
+    "supports_alpha",
     "to_pixels",
     "validate_dpi",
+    "watermark",
 ]

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mullion"
-version = "0.1.1"
+version = "0.2.0"
 description = "One correct way to open an image: EXIF orientation applied, transparency resolved, backgrounds cleaned."
 readme = "README.md"
 license = "Apache-2.0"
