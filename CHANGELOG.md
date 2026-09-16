@@ -7,7 +7,67 @@ pre-1.0 means what it says.
 
 ## [Unreleased]
 
+## [0.2.0]
+
+The library reached the other end of the pipeline. Everything it did before was
+about getting an image *in*; a consumer adopting `open_bytes` found that the
+same defect was waiting on the way out, in code that was never making a
+transparency decision at all.
+
+### Added
+
+- `mullion.encode` — `encode()` and `supports_alpha()`. An `RGBA` image handed
+  to a JPEG encoder raises `cannot write mode RGBA as JPEG`, which is loud and
+  therefore harmless in itself. What it provokes is not: the obvious repair is
+  `image.convert("RGB")`, which reads like a type fix and is precisely the
+  black-rectangle defect this library exists for, reintroduced at the far end
+  of a pipeline that may already have fixed it at the near end. `encode()`
+  composites onto a matte when the target format cannot carry transparency and
+  leaves the channel alone when it can, so the caller says what they are
+  writing rather than what mode the image must be in.
+
+  Which formats those are is asked of Pillow, by writing one transparent pixel
+  and seeing whether the encoder objects, rather than answered from a table
+  kept here. A table would be wrong in both directions: AVIF depends on a
+  plugin that may not be installed, and a format added in a later Pillow would
+  go unrecognised by a library that believes it knows them all. Note that "can
+  carry alpha" is not "carries yours faithfully" — GIF answers yes with one bit
+  of it.
+
+- `mullion.resize` — `contain()` and `cover()`. Pillow has three spellings for
+  fitting an image to a box and they disagree in ways that are quiet rather
+  than loud: `thumbnail` mutates in place and returns `None`, so
+  `smaller = image.thumbnail(box)` binds nothing and edits an image somebody
+  else is holding; `resize` scales in both directions, so "no bigger than
+  800px" blurs a 200px upload up to 800; and `ImageOps.fit` is named fit and
+  crops. These two are named for what they do to the content, in the vocabulary
+  CSS settled on. `contain()` is built on `thumbnail`, deliberately — it
+  carries Pillow's own reducing-gap pre-pass, so moving an existing
+  `image.thumbnail(box, LANCZOS)` call onto it produces the same pixels rather
+  than a similar picture.
+
+- `mullion.watermark` — `watermark()`, with `WatermarkStyle` and
+  `DEFAULT_WATERMARK_STYLE`. A text mark sized against the image's shorter side
+  with clamps at both ends, over an offset halo. Each of those is a failure
+  somebody else's photograph produces: a fixed size is illegible on a thumbnail
+  and billboard-sized on a large render, scaling off the width alone re-weights
+  every portrait image, and white type without a halo vanishes into a bright
+  sky and reads as a rendering fault. The style is frozen and every knob is in
+  it; the policy question — whether a font fault should fail the request or
+  ship the picture unmarked — is deliberately left to the caller, and is
+  usually the second.
+
 ### Changed
+
+- The README's scope list no longer excludes resizing and encoding, and says
+  why rather than quietly dropping them. Resizing was excluded because
+  "`ImageOps.fit` and friends already do this well", which was this library's
+  own mistake one level up — there are three spellings, they disagree, and the
+  disagreement is quiet. Encoding was excluded as "format conversion", which it
+  is not: deciding what happens to an alpha channel the target cannot hold is
+  the same transparency decision `open_bytes` makes, at the other end. Both
+  lines were drawn from the shape of the code rather than from where the
+  defects were.
 
 - `open_bytes()` and `open_path()` document what they close over. Both open the
   source inside the call and return a converted copy, so nothing only the source
