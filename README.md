@@ -14,7 +14,7 @@ that opens user images in six places gets six different answers, and the fix is
 one member they all lean on.
 
 ```python
-from mullion import contain, encode, open_bytes, watermark
+from mullion import contain, encode, open_bytes, open_path, watermark
 
 image = open_bytes(upload.read())          # RGB, upright, no black rectangle
 avatar = open_path(path, keep_alpha=True)  # RGBA preserved
@@ -22,6 +22,13 @@ avatar = open_path(path, keep_alpha=True)  # RGBA preserved
 hero = watermark(contain(image, (1280, 720)), "example.com")
 body = encode(hero, "JPEG", quality=88)    # composited, not blackened
 ```
+
+One caveat worth knowing before you build on that first line: **the adapters
+open and close the source for you, so the image they hand back cannot answer
+anything about the file that arrived** — `n_frames` reads `1` even for an
+animation, and `format` reads `None`. Want pixels, use an adapter; want to know
+what arrived, use `normalize` and open the source yourself. The `mullion.source`
+section below has the wrong and right versions side by side.
 
 ## The defect this exists for
 

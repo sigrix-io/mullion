@@ -21,6 +21,8 @@ the one arriving from PyPI, and they are the one who cannot follow it.
 
 from __future__ import annotations
 
+import ast
+import doctest
 import re
 import tomllib
 from pathlib import Path
@@ -96,3 +98,98 @@ def test_the_sweep_rejects_a_relative_reference(kind: str, target: str) -> None:
     markup = f'<img src="{target}">' if kind == "img" else f"[docs]({target})"
     assert _references(markup), f"the {kind} pattern no longer matches its own spelling"
     assert not _RESOLVES_ANYWHERE.match(target)
+
+
+# --------------------------------------------------------------------------
+# The examples on that page have to run
+# --------------------------------------------------------------------------
+
+_PY_BLOCK = re.compile(r"```python\n(.*?)```", re.S)
+
+
+def _python_blocks(text: str) -> list[str]:
+    """Every fenced python example, as source that can be parsed.
+
+    Two shapes appear on this page and only one is runnable as written: plain
+    source, and a ``>>>`` transcript showing a value coming back (which is how
+    the black-rectangle demonstration is written, because the point is the
+    tuple it prints). ``doctest`` already knows how to pull the statements out
+    of the second, so the guard reads both rather than only the shape it
+    happened to meet first.
+    """
+    blocks = []
+    for block in _PY_BLOCK.findall(text):
+        if ">>>" in block:
+            blocks.append("\n".join(e.source for e in doctest.DocTestParser().get_examples(block)))
+        else:
+            blocks.append(block)
+    return blocks
+
+
+def _exports() -> set[str]:
+    import mullion
+
+    return set(mullion.__all__)
+
+
+def _imported_from_mullion(tree: ast.AST) -> set[str]:
+    return {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "mullion"
+        for alias in node.names
+    }
+
+
+def _names_used(tree: ast.AST) -> set[str]:
+    return {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+
+
+def test_every_readme_example_parses() -> None:
+    blocks = _python_blocks(_readme_named_by_pyproject().read_text())
+    assert blocks, "no python examples found -- has the fence spelling changed?"
+    for index, block in enumerate(blocks):
+        try:
+            ast.parse(block)
+        except SyntaxError as exc:  # pragma: no cover - only on a broken README
+            raise AssertionError(f"README example {index} does not parse: {exc}") from exc
+
+
+def test_every_mullion_name_an_example_uses_was_imported_first() -> None:
+    """A copied example has to run, and one of these did not.
+
+    `0.2.0` shipped a quick start that called ``open_path`` and imported only
+    ``contain, encode, open_bytes, watermark`` — a ``NameError`` for the first
+    reader to paste it, on the page PyPI renders. Nothing caught it: it is
+    prose to every linter, the wheel builds, and ``twine check`` validates that
+    the markup renders rather than that the code works.
+
+    Imports accumulate down the page, the way a reader accumulates them: a
+    later block may use a name an earlier block imported, which is how the
+    ``n_frames`` wrong/right pair is written. What it may not do is use an
+    export that has been introduced nowhere.
+    """
+    exports = _exports()
+    blocks = _python_blocks(_readme_named_by_pyproject().read_text())
+    assert blocks, "no python examples found -- has the fence spelling changed?"
+
+    seen: set[str] = set()
+    offenders: list[str] = []
+    for index, block in enumerate(blocks):
+        tree = ast.parse(block)
+        seen |= _imported_from_mullion(tree)
+        for name in sorted((_names_used(tree) & exports) - seen):
+            offenders.append(f"example {index}: {name}")
+
+    assert offenders == [], (
+        f"{offenders} are used in a README example before any example imports them. "
+        "A reader who copies the block gets a NameError."
+    )
+
+
+def test_the_example_checker_catches_a_missing_import() -> None:
+    """Guards the guard, with the exact defect that shipped in 0.2.0."""
+    tree = ast.parse("from mullion import open_bytes\nopen_path(p)\n")
+    used = _names_used(tree) & _exports()
+    assert "open_path" in used
+    assert "open_path" not in _imported_from_mullion(tree)

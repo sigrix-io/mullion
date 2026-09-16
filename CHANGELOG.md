@@ -7,6 +7,36 @@ pre-1.0 means what it says.
 
 ## [Unreleased]
 
+## [0.2.1]
+
+### Fixed
+
+- The README's quick start imports `open_path`, which it has always called.
+  `0.2.0` shipped `from mullion import contain, encode, open_bytes, watermark`
+  above a line reading `avatar = open_path(path, keep_alpha=True)` — a
+  `NameError` for the first reader to paste it, on the page PyPI renders as
+  the package description. Nothing caught it: an example is prose to every
+  linter, the wheel builds either way, and `twine check` validates that the
+  markup renders rather than that the code runs.
+
+  A test now parses every fenced example and asserts that each exported name
+  it uses was imported by that example or an earlier one — imports accumulate
+  down the page the way a reader accumulates them, which is how the `n_frames`
+  wrong-and-right pair is written. It reads `>>>` transcripts through
+  `doctest` as well as plain source, because the black-rectangle demonstration
+  is a transcript and a guard that only understood one shape would have been
+  blind to half the page.
+
+### Changed
+
+- The quick start carries the adapter caveat rather than leaving it eighty
+  lines below. `open_bytes` and `open_path` close the source, so the image
+  they return cannot answer anything about the file that arrived — `n_frames`
+  reads `1` even for an animation. That was documented in the
+  `mullion.source` section from `0.2.0`, which is no help to somebody who
+  copies the first code block and moves on; it is the caveat most likely to
+  bite, and it now sits where the call it qualifies is.
+
 ## [0.2.0]
 
 The library reached the other end of the pipeline. Everything it did before was
