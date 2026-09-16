@@ -43,11 +43,32 @@ class TestContainReplacesThumbnail:
 
         ``thumbnail`` runs a reducing-gap pass before the resample. Arithmetic
         plus ``resize`` produces a *similar* picture and different bytes, which
-        would make this an upgrade nobody asked for rather than a rename.
+        would make this an upgrade nobody asked for rather than a rename — and
+        for a consumer moving onto this call, a silent re-render of every
+        cached derivative it has.
+
+        **The box is load-bearing.** That pre-pass only engages past roughly a
+        fourfold reduction, so at 800x600 into (320, 320) the two agree to the
+        byte and this test passes against either implementation. It was written
+        that way first and a mutation walked straight through it. The second
+        half is the canary: it fails if the box stops being one that can tell
+        the two apart.
         """
         expected = landscape.copy()
-        expected.thumbnail((320, 320), Image.Resampling.LANCZOS)
-        assert contain(landscape, (320, 320)).tobytes() == expected.tobytes()
+        expected.thumbnail((100, 100), Image.Resampling.LANCZOS)
+        assert contain(landscape, (100, 100)).tobytes() == expected.tobytes()
+
+        scale = min(100 / landscape.width, 100 / landscape.height)
+        naive = landscape.resize(
+            (round(landscape.width * scale), round(landscape.height * scale)),
+            Image.Resampling.LANCZOS,
+        )
+        assert naive.size == expected.size
+        assert naive.tobytes() != expected.tobytes(), (
+            "arithmetic and resize agree with thumbnail at this box, so the "
+            "assertion above would pass against either — pick a box with a "
+            "larger reduction"
+        )
 
 
 class TestContainDoesNotUpscaleUnlessAsked:
