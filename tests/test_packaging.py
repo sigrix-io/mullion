@@ -48,7 +48,7 @@ def _readme_named_by_pyproject() -> Path:
     ``readme`` at a different file moves this guard with it instead of
     silently leaving it testing a file nobody publishes.
     """
-    config = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     named = config["project"]["readme"]
     # The key also accepts a table; only the string form is in use here, and a
     # switch to the table form should fail loudly rather than be guessed at.
@@ -66,7 +66,7 @@ def _references(text: str) -> list[tuple[str, str]]:
 
 def test_every_readme_reference_resolves_off_github() -> None:
     readme = _readme_named_by_pyproject()
-    references = _references(readme.read_text())
+    references = _references(readme.read_text(encoding="utf-8"))
 
     # A sweep that finds nothing and a README with nothing to find read
     # identically. This README has both images and links today; if a rewrite
@@ -146,7 +146,7 @@ def _names_used(tree: ast.AST) -> set[str]:
 
 
 def test_every_readme_example_parses() -> None:
-    blocks = _python_blocks(_readme_named_by_pyproject().read_text())
+    blocks = _python_blocks(_readme_named_by_pyproject().read_text(encoding="utf-8"))
     assert blocks, "no python examples found -- has the fence spelling changed?"
     for index, block in enumerate(blocks):
         try:
@@ -170,7 +170,7 @@ def test_every_mullion_name_an_example_uses_was_imported_first() -> None:
     export that has been introduced nowhere.
     """
     exports = _exports()
-    blocks = _python_blocks(_readme_named_by_pyproject().read_text())
+    blocks = _python_blocks(_readme_named_by_pyproject().read_text(encoding="utf-8"))
     assert blocks, "no python examples found -- has the fence spelling changed?"
 
     seen: set[str] = set()
