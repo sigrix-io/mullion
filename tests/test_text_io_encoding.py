@@ -15,38 +15,102 @@ and which one a contributor meets depends only on which characters happen to
 be in the file that day. Measured 2026-09-16, before the fix: the four
 ``test_packaging`` cases pass here and fail under ``LC_ALL=C``.
 
-Scoped to ``read_text``/``write_text`` on purpose. The obvious third member,
-``.open(``, cannot be swept textually in this repository — ``Image.open`` is
-Pillow's decoder, it is binary, it appears a dozen times including inside
-docstrings, and every one of those is correct. A rule that flagged them would
-be turned off rather than obeyed.
+Covers the builtin ``open`` as well as ``read_text``/``write_text``, which is
+what put this rule on the AST. Both of the awkward cases are name collisions
+that no pattern can resolve: ``open(`` is a suffix of ``Popen(`` and of every
+identifier ending in ``_open``, and ``Image.open`` is Pillow's decoder, which
+shares a method name with ``Path.open`` while putting a *file* where pathlib
+puts a *mode*. It appears a dozen times here, including inside docstrings, and
+every one of those is correct — a rule that flagged them would be turned off
+rather than obeyed, so the rule reads what the call is rather than how it is
+spelled, and leaves alone anything it cannot read.
 """
 
 from __future__ import annotations
 
+import ast
+import re
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-#: The calls whose default encoding comes from the locale rather than the file.
-_TEXT_IO_CALLS = ("read_text(", "write_text(")
+#: A file mode is drawn from this alphabet and nothing else, which is what
+#: tells ``path.open("r")`` apart from ``Image.open("photo.png")``: both put a
+#: string first, and only one of them is naming a mode.
+_MODE = re.compile(r"^[rwxabt+]+$")
+
+#: A mode that was computed rather than written down. Reported by nobody: see
+#: _implicit_encoding_calls on why guessing costs more than missing.
+_UNKNOWN = object()
+
+
+def _named_mode(node: ast.Call, position: int) -> object:
+    """The mode this call names, read from ``position`` or from ``mode=``."""
+    mode = node.args[position] if len(node.args) > position else None
+    for keyword in node.keywords:
+        if keyword.arg == "mode":
+            mode = keyword.value
+    if mode is None:
+        return None
+    if isinstance(mode, ast.Constant) and isinstance(mode.value, str):
+        return mode.value
+    return _UNKNOWN
 
 
 def _implicit_encoding_calls(text: str) -> list[str]:
-    """Every text-I/O call in ``text`` that does not name utf-8, with its line."""
+    """Every text-I/O call in ``text`` that does not name utf-8, with its line.
+
+    Reads the AST rather than the characters. The builtin ``open`` is what
+    forces it: textually ``open(`` is a suffix of ``Popen(`` and of every
+    identifier ending in ``_open``, so a pattern that caught the call would
+    catch those too, and a rule that fires on correct code gets switched off
+    rather than obeyed.
+
+    ``Image.open`` is the same problem from the other side, and it is why a
+    first argument that is not a mode leaves the call alone. Pillow's decoder
+    shares the method name with ``Path.open`` and puts a *file* where pathlib
+    puts a *mode* — ``Image.open(path)``, ``Image.open(BytesIO(payload))``,
+    and, if anyone writes it, ``Image.open("photo.png")``. Modes are drawn
+    from ``rwxabt+`` and filenames are not, so the two are told apart by
+    shape; anything else is left alone, because a guard that flagged a decoded
+    PNG would be deleted within the week.
+
+    ``Path.write_text`` requires the data to write, so a ``write_text()`` call
+    with no positional argument is some other method of that name.
+    """
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:
+        # Never answer "clean" for a file that was never read: an empty list
+        # from a parse failure is indistinguishable from one that holds.
+        return [f"could not be parsed, so nothing was checked: {exc}"]
+
     findings: list[str] = []
-    for call in _TEXT_IO_CALLS:
-        index = 0
-        while True:
-            position = text.find(call, index)
-            if position == -1:
-                break
-            if "utf-8" not in text[position : position + 200]:
-                line = text.count("\n", 0, position) + 1
-                findings.append(f"{call}) without encoding, line {line}")
-            index = position + len(call)
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+
+        function = node.func
+        if isinstance(function, ast.Name) and function.id == "open":
+            name, mode = "open", _named_mode(node, 1)
+        elif isinstance(function, ast.Attribute) and function.attr == "open":
+            name, mode = "open", _named_mode(node, 0)
+            if isinstance(mode, str) and not _MODE.match(mode):
+                continue  # a filename, so not pathlib's open
+        elif isinstance(function, ast.Attribute) and function.attr in {"read_text", "write_text"}:
+            if function.attr == "write_text" and not node.args:
+                continue
+            name, mode = function.attr, None
+        else:
+            continue
+
+        if mode is _UNKNOWN or (isinstance(mode, str) and "b" in mode):
+            continue
+        if any(keyword.arg == "encoding" for keyword in node.keywords):
+            continue
+        findings.append(f"{name}() without encoding, line {node.lineno}")
     return findings
 
 
@@ -86,8 +150,21 @@ def test_the_sweep_read_something_to_sweep() -> None:
     [
         ('Path("a").read_text()', True),
         ('Path("a").write_text(body)', True),
+        ("open(path)", True),
+        ('open(path, "r")', True),
+        # Path.open() with no mode is text; Image.open needs a file, so a
+        # no-argument .open() cannot be that one.
+        ('Path("a").open()', True),
         ('Path("a").read_text(encoding="utf-8")', False),
+        ('open(path, "wb")', False),
+        ('open(path, encoding="utf-8")', False),
+        ('Path("a").open("rb")', False),
+        # The collisions that put this rule on the AST.
         ("Image.open(BytesIO(payload))", False),
+        ("Image.open(path)", False),
+        ('Image.open("photo.png")', False),
+        ("subprocess.Popen(argv)", False),
+        ("report.write_text()", False),
     ],
 )
 def test_the_sweep_still_has_teeth(source: str, flagged: bool) -> None:
