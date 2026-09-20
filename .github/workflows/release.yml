@@ -39,12 +39,9 @@ jobs:
       # when discovering an action's breaking change is most expensive, so it
       # should run on the versions the rest of the repository has exercised.
       # Dependabot moves both files together.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: sigrix-io/actions/setup-python-project@765103f1c9d89e019dcaea72a78eed2577b30ae1 # v1.0.0
         with:
-          python-version: "3.13"
-
-      - run: python -m pip install build twine
+          install: build twine
       - run: python -m build
 
       # hatchling reads the version out of pyproject.toml; the tag is typed by
@@ -208,63 +205,34 @@ jobs:
     needs: [build, publish]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
+      # The action takes the version rather than deriving it, so it holds no
+      # opinion about how this repository spells its tags. The build job has
+      # already refused the tag unless it named the packaged version.
+      - id: tag
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Install from PyPI by name, and import what was published
+      # Waits out the index, installs that exact version, and checks it is
+      # that version, resolved from site-packages, carrying py.typed. Every
+      # Sigrix package wants those; none of them are about mullion.
+      - id: published
+        uses: sigrix-io/actions/verify-published-package@765103f1c9d89e019dcaea72a78eed2577b30ae1 # v1.0.0
+        with:
+          package: mullion
+          version: ${{ steps.tag.outputs.version }}
+          import-name: mullion
+
+      # What *this* package claims about itself, against the same environment
+      # the action installed into. A shared action should not know what
+      # mullion exports; this is where that knowledge belongs.
+      - name: Every name the published package exports resolves
         run: |
           set -euo pipefail
-
-          # The build job already refused the tag unless it named the packaged
-          # version, so the tag is a sound source for what to expect here.
-          EXPECTED="${GITHUB_REF_NAME#v}"
-
-          python -m venv /tmp/verify
-
-          # Ten minutes, at fifteen-second intervals. The index lags an upload
-          # by seconds usually and by minutes occasionally, and the asymmetry
-          # is what sets this: a window that is too short reports a healthy
-          # release as a failure, while one that is too long costs nothing
-          # until something is actually wrong. The loop breaks on the first
-          # success, so the usual cost is a single attempt.
-          for attempt in $(seq 1 40); do
-            if /tmp/verify/bin/pip install --quiet "mullion==$EXPECTED"; then
-              echo "installed on attempt $attempt"
-              break
-            fi
-            if [ "$attempt" = "40" ]; then
-              echo "::error::mullion==$EXPECTED never became installable from PyPI. The upload reported success, so check the project page before re-tagging — a version is spent permanently either way."
-              exit 1
-            fi
-            echo "not on the index yet (attempt $attempt); waiting"
-            sleep 15
-          done
-
-          # Not merely that something installed — that the thing published by
-          # *this run* did. An older release already on the index would
-          # satisfy a bare install and tell us nothing.
           cd /tmp
-          EXPECTED="$EXPECTED" /tmp/verify/bin/python - <<'PY'
-          import os
-          import pathlib
-
+          ${{ steps.published.outputs.python }} - <<'PY'
           import mullion
-
-          expected = os.environ["EXPECTED"]
-          assert mullion.__version__ == expected, (
-              f"installed {mullion.__version__} from the index, expected {expected}"
-          )
-
-          # src-layout means ./mullion does not exist here, so this can only
-          # have resolved to the downloaded wheel.
-          assert "site-packages" in mullion.__file__, mullion.__file__
-
-          root = pathlib.Path(mullion.__file__).parent
-          assert (root / "py.typed").exists(), "py.typed did not survive the round trip to PyPI"
 
           for name in mullion.__all__:
               assert hasattr(mullion, name), name
 
-          print(f"{expected} installs from PyPI and resolves {len(mullion.__all__)} exports")
+          print(f"{len(mullion.__all__)} exports resolve")
           PY
