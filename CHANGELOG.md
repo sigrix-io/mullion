@@ -7,6 +7,21 @@ pre-1.0 means what it says.
 
 ## [Unreleased]
 
+### Security
+
+- Every action in both workflows is pinned to a commit with a `# vX.Y.Z`
+  comment beside it, rather than to a floating major tag — the same SHAs
+  `sigrix-io/postern` and `sigrix-io/sigrix-mcp` carry. A tag is moved by
+  whoever owns the action, so the code that runs on a release could change
+  with nothing here recording it, and the diff of the run that shipped would
+  read identically to the one before. Only the publish step was pinned
+  before; `checkout`, `setup-python` and both artifact actions were not.
+- `tests/test_workflow_pins.py` is what notices if that slips: every `uses:`
+  must name a 40-character commit and carry the version comment Dependabot
+  rewrites, and `release.yml` must still store no credential. Both halves
+  were confirmed to fail when mutated — a pin reverted to a tag, and a
+  version comment removed.
+
 ## [0.2.1]
 
 ### Fixed
