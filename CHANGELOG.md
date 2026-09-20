@@ -7,6 +7,19 @@ pre-1.0 means what it says.
 
 ## [Unreleased]
 
+### Added
+
+- `release.yml` gains a `verify` job, adapted from `sigrix-io/postern`: after
+  the upload it installs `mullion==<tag>` from PyPI **by name** and imports
+  it. An upload that succeeds is not the same as a package anyone can
+  install, and the two look identical from the publish step — a green tick.
+  Every other check in that workflow proves something about a local file;
+  this is the only one that exercises what somebody else's requirements file
+  actually resolves to. It asserts the version matches the tag, that
+  `py.typed` survived the round trip, and that every name in `__all__`
+  resolves. Pinning the exact version matters: an older release already on
+  the index would satisfy a bare install and prove nothing.
+
 ### Security
 
 - Every action in both workflows is pinned to a commit with a `# vX.Y.Z`
