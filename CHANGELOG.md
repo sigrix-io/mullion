@@ -7,6 +7,37 @@ pre-1.0 means what it says.
 
 ## [Unreleased]
 
+### Changed
+
+- Both workflows now call `sigrix-io/actions`, the new repository holding the
+  composite actions the Sigrix projects share. Eleven `uses:` lines across the
+  three repositories named the same two upstream commit pins; here they drop
+  to **zero** — every Python job is one `uses:` line, and the only upstream
+  pins left are the two artifact actions, used once each. A pin only stays
+  correct if something bumps it, and three Dependabot queues editing the same
+  two actions is how this repository came to run floating tags while postern
+  was pinned. `tests/test_workflow_pins.py` covers the new references
+  unchanged, because they are written the same way: a commit, with the
+  version in the comment.
+- The publish step is untouched, and that is what chose composite actions over
+  reusable workflows: a reusable workflow cannot publish to PyPI, because
+  trusted publishing matches the OIDC claim against the workflow that ran. A
+  composite action runs inside the caller's job, so the caller's identity is
+  unchanged.
+
+### Added
+
+- `release.yml` gains a `verify` job, adapted from `sigrix-io/postern`: after
+  the upload it installs `mullion==<tag>` from PyPI **by name** and imports
+  it. An upload that succeeds is not the same as a package anyone can
+  install, and the two look identical from the publish step — a green tick.
+  Every other check in that workflow proves something about a local file;
+  this is the only one that exercises what somebody else's requirements file
+  actually resolves to. It asserts the version matches the tag, that
+  `py.typed` survived the round trip, and that every name in `__all__`
+  resolves. Pinning the exact version matters: an older release already on
+  the index would satisfy a bare install and prove nothing.
+
 ### Security
 
 - Every action in both workflows is pinned to a commit with a `# vX.Y.Z`

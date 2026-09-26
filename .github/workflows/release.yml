@@ -39,12 +39,9 @@ jobs:
       # when discovering an action's breaking change is most expensive, so it
       # should run on the versions the rest of the repository has exercised.
       # Dependabot moves both files together.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: sigrix-io/actions/setup-python-project@765103f1c9d89e019dcaea72a78eed2577b30ae1 # v1.0.0
         with:
-          python-version: "3.13"
-
-      - run: python -m pip install build twine
+          install: build twine
       - run: python -m build
 
       # hatchling reads the version out of pyproject.toml; the tag is typed by
@@ -190,3 +187,52 @@ jobs:
       # credential worth stealing. Dependabot bumps the pin and rewrites the
       # trailing comment with it.
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+
+  # An upload that succeeds is not the same as a package anyone can install,
+  # and the two failures look identical from the publish step: a green tick.
+  # This is the check that tells them apart — install by name, from the index
+  # the upload just went to, the way a caller would.
+  #
+  # What it catches, none of which the publish step can see: an upload that
+  # did not land, an index that will not serve it, a wheel whose type marker
+  # did not ride along, and a version that disagrees with the one this run
+  # built. The build job proves those properties of a *local* file; this
+  # proves them of the artifact somebody else's requirements file resolves to.
+  #
+  # Adapted from `sigrix-io/postern`, which has run this shape through real
+  # releases. The retry window is longer than postern's — see below.
+  verify:
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    steps:
+      # The action takes the version rather than deriving it, so it holds no
+      # opinion about how this repository spells its tags. The build job has
+      # already refused the tag unless it named the packaged version.
+      - id: tag
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # Waits out the index, installs that exact version, and checks it is
+      # that version, resolved from site-packages, carrying py.typed. Every
+      # Sigrix package wants those; none of them are about mullion.
+      - id: published
+        uses: sigrix-io/actions/verify-published-package@765103f1c9d89e019dcaea72a78eed2577b30ae1 # v1.0.0
+        with:
+          package: mullion
+          version: ${{ steps.tag.outputs.version }}
+          import-name: mullion
+
+      # What *this* package claims about itself, against the same environment
+      # the action installed into. A shared action should not know what
+      # mullion exports; this is where that knowledge belongs.
+      - name: Every name the published package exports resolves
+        run: |
+          set -euo pipefail
+          cd /tmp
+          ${{ steps.published.outputs.python }} - <<'PY'
+          import mullion
+
+          for name in mullion.__all__:
+              assert hasattr(mullion, name), name
+
+          print(f"{len(mullion.__all__)} exports resolve")
+          PY
