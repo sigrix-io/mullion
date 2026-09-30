@@ -9,6 +9,10 @@ pre-1.0 means what it says.
 
 ### Changed
 
+- Dependabot opens one pull request per ecosystem instead of one per
+  dependency. The branch ruleset only merges a pull request that is up to date
+  with `main`, so each separate update merged put every other one behind.
+  Nothing in the package changes.
 - Both workflows now call `sigrix-io/actions`, the new repository holding the
   composite actions the Sigrix projects share. Eleven `uses:` lines across the
   three repositories named the same two upstream commit pins; here they drop
