@@ -4,6 +4,11 @@
 
 # Mullion
 
+[![PyPI](https://img.shields.io/pypi/v/mullion)](https://pypi.org/project/mullion/)
+[![Python](https://img.shields.io/pypi/pyversions/mullion)](https://pypi.org/project/mullion/)
+[![CI](https://github.com/sigrix-io/mullion/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sigrix-io/mullion/actions/workflows/ci.yml)
+[![Licence](https://img.shields.io/github/license/sigrix-io/mullion)](https://github.com/sigrix-io/mullion/blob/main/LICENSE)
+
 **One correct way to open an image — and to write it back out.** EXIF
 orientation applied, transparency resolved rather than dropped at both ends,
 and a background cleaner that does not eat the subject.
@@ -29,6 +34,18 @@ anything about the file that arrived** — `n_frames` reads `1` even for an
 animation, and `format` reads `None`. Want pixels, use an adapter; want to know
 what arrived, use `normalize` and open the source yourself. The `mullion.source`
 section below has the wrong and right versions side by side.
+
+## Install
+
+```bash
+pip install mullion
+```
+
+Python 3.11+, and Pillow is the only dependency.
+
+Importing the package costs nothing — Pillow is imported inside the functions
+that need it, so a service that imports at module scope and opens images rarely
+does not pay for it at start-up.
 
 ## The defect this exists for
 
@@ -66,18 +83,6 @@ time will not catch it.
 This is measured, not hypothetical. Across one production codebase the same
 transparent PNG came back on a black rectangle through three upload paths and
 correctly through four others, because each had been written independently.
-
-## Install
-
-```bash
-pip install mullion
-```
-
-Python 3.11+, and Pillow is the only dependency.
-
-Importing the package costs nothing — Pillow is imported inside the functions
-that need it, so a service that imports at module scope and opens images rarely
-does not pay for it at start-up.
 
 ## What it does
 
@@ -293,6 +298,18 @@ target format cannot hold is the *same* transparency decision `open_bytes`
 makes, arriving at the other end of the pipeline. Both were drawn the way a
 scope line usually is, from the shape of the code rather than from where the
 defects were.
+
+## Where it fits
+
+Mullion is one of the open-source projects [Sigrix](https://sigrix.io)
+publishes, though nothing in it knows about Sigrix. Sigrix is where it runs in
+production: every picture anyone hands that platform — an avatar, a
+storefront cover, a sample render — is opened, fitted, sometimes marked and
+re-encoded by this library. It was a module there until a second codebase
+needed exactly it.
+
+Every project Sigrix publishes, and a map of how they connect:
+[sigrix.io/open-source](https://sigrix.io/open-source).
 
 ## Versioning
 
