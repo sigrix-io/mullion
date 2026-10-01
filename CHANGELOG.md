@@ -9,6 +9,12 @@ pre-1.0 means what it says.
 
 ### Changed
 
+- The README opens with badges for the PyPI release, the Python versions, CI
+  and the licence, and *Install* moves up to sit under the opening example,
+  so the command is on the first screen rather than after the case for the
+  library. A new *Where it fits* section says where it runs in production and
+  links the other projects Sigrix publishes. The README is the PyPI page too,
+  so the next release carries it there. Nothing in the output changes.
 - Dependabot opens one pull request per ecosystem instead of one per
   dependency. The branch ruleset only merges a pull request that is up to date
   with `main`, so each separate update merged put every other one behind.
