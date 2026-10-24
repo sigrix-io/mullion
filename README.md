@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sigrix-io/mullion/main/.github/social-preview.png" alt="Mullion — one correct way to open an image" width="800">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/sigrix-io/mullion/main/.github/assets/logo-on-dark.svg">
+    <img src="https://raw.githubusercontent.com/sigrix-io/mullion/main/.github/assets/logo.svg" alt="Mullion" width="120">
+  </picture>
 </p>
 
 # Mullion
