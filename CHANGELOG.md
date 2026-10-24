@@ -15,6 +15,10 @@ pre-1.0 means what it says.
   library. A new *Where it fits* section says where it runs in production and
   links the other projects Sigrix publishes. The README is the PyPI page too,
   so the next release carries it there. Nothing in the output changes.
+- The README's cover image gives way to the project's logo, and readers in
+  GitHub's dark mode are shown a version drawn for it. The README is the PyPI
+  page too, so the next release carries the change there. Nothing in the
+  package changes.
 - Dependabot opens one pull request per ecosystem instead of one per
   dependency. The branch ruleset only merges a pull request that is up to date
   with `main`, so each separate update merged put every other one behind.
