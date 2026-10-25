@@ -7,6 +7,8 @@ pre-1.0 means what it says.
 
 ## [Unreleased]
 
+## [0.2.2]
+
 ### Changed
 
 - The README opens with badges for the PyPI release, the Python versions, CI
