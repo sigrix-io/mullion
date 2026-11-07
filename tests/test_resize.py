@@ -116,7 +116,10 @@ class TestCoverFillsAndCrops:
 
 class TestTheAwkwardInputs:
     def test_an_alpha_channel_survives_the_resize(self, rgba_cutout):
-        """A resize that quietly returned RGB would undo the open (#5859's bug)."""
+        """A resize that quietly returned RGB would undo the open.
+
+        The cutout's transparent corners would come back black, as a bare convert makes them.
+        """
         assert contain(rgba_cutout, (16, 16)).mode == "RGBA"
 
     def test_a_palette_image_is_not_converted_behind_the_callers_back(self, palette_cutout):
