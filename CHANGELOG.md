@@ -7,6 +7,21 @@ pre-1.0 means what it says.
 
 ## [Unreleased]
 
+## [0.2.3]
+
+### Changed
+
+- A test's docstring cited an issue number from the Sigrix platform's own
+  tracker, which nobody outside it can open. It now says what the bug was: a
+  resize that quietly returned RGB would undo the open, and a cutout's
+  transparent corners would come back black. The source distribution carries
+  the tests, so 0.2.0, 0.2.1 and 0.2.2 shipped the number to PyPI, where a
+  published file never changes; this release carries the corrected text.
+  Nothing in the package changes.
+- Dependabot moved the publish action, `pypa/gh-action-pypi-publish`, to
+  1.14.3, so this is the first release it uploads, and the development pins of
+  ruff and mypy to 0.17.3 and 2.4.1. Nothing in the package changes.
+
 ## [0.2.2]
 
 ### Changed
